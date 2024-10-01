@@ -16,7 +16,7 @@ const bookShcema = new mongoose.Schema({
     unique: true,
     min: 13,
   },
-  releaseDate: {
+  CreatedDate: {
     type: Date,
     required: true,
     default: Date.now(),

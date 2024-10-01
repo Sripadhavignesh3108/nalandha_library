@@ -31,12 +31,11 @@ export const restrict = (role) => {
   return (req, res, next) => {
     // console.log("restrict")
     if (req.user.role !== role) {
-      return res
-        .status(400)
-        .json({
-          message: "Access denied for this account! authorization Failed",
-        });
+      return res.status(400).json({
+        message: "Access denied for this account! authorization Failed",
+      });
     }
     next();
   };
 };
+

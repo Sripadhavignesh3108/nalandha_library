@@ -1,61 +1,85 @@
 import { bookModel } from "../models/bookModel.js";
 import { borrowModel } from "../models/borrowModel.js";
 import { userModel } from "../models/userModel.js";
+import jwt from "jsonwebtoken";
 
 export const BorrowBook = async (req, res) => {
   try {
-    const { userId, bookId } = req.body;
-    // validating if the user provided correct details or not.
-    if (!userId && !bookId) {
-      return res
-        .status(400)
-        .json({ message: "userId  and bookId is a required field" });
-    }
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.split(" ")[0] === "Bearer"
+    ) {
+      let token = req.headers.authorization.split(" ")[1];
+      const decoded = jwt.verify(token, "secret@3108key");
+      console.log(decoded);
+      const { bookId } = req.body;
+      const userId = decoded.id;
+      console.log(userId);
+      // validating if the user provided correct details or not.
+      if (!userId && !bookId) {
+        return res
+          .status(400)
+          .json({ message: "userId  and bookId is a required field" });
+      } else if (userId && !bookId) {
+        return res
+          .status(400)
+          .json({ message: "Please provide a valid bookId" });
+      } else if (!userId && bookId) {
+        return res
+          .status(400)
+          .json({ message: "PLease provide a valid userId" });
+      }
 
-    let userData = await userModel.findOne({ _id: userId });
-    let Bookdata = await bookModel.findOne({ _id: bookId });
-    const borrowData = await borrowModel.findOne({ userId: userId });
+      let userData = await userModel.findOne({ _id: userId });
+      let Bookdata = await bookModel.findOne({ _id: bookId });
+      const borrowData = await borrowModel.findOne({ userId: userId });
 
-    // checking if bookdata with user provided id is available or not.
-    if (Bookdata && userData) {
-      const { copies } = Bookdata;
-      if (copies > 0) {
-        // checking if user has already borrowed the book or not.
-        if (
-          borrowData &&
-          borrowData.userId.toString() == userId &&
-          borrowData.bookId.toString() === bookId
-        ) {
-          return res
-            .status(400)
-            .json({ message: "You have already borrowed this book" });
-        }
-        // updating the book copies and adding the borrow data to the borrow collection.
-        else {
-          const bookIsBorrowed = await borrowModel.create({
-            userId,
-            bookId,
-            borrowDate: Date.now(),
-          });
-          const updatedBook = await bookModel.updateOne(
-            { _id: bookId },
-            { $inc: { copies: -1 } }
-          );
-          return res.status(201).json({
-            message: "Book borrowed successfully",
-            bookdata: Bookdata,
-            borrowDetails: bookIsBorrowed,
-          });
+      // checking if bookdata with user provided id is available or not.
+      if (Bookdata && userData) {
+        const { copies } = Bookdata;
+        if (copies > 0) {
+          // checking if user has already borrowed the book or not.
+          if (
+            borrowData &&
+            borrowData.userId.toString() == userId &&
+            borrowData.bookId.toString() === bookId
+          ) {
+            return res
+              .status(400)
+              .json({ message: "You have already borrowed this book" });
+          }
+          // updating the book copies and adding the borrow data to the borrow collection.
+          else {
+            const bookIsBorrowed = await borrowModel.create({
+              userId,
+              bookId,
+              borrowDate: Date.now(),
+            });
+            const updatedBook = await bookModel.updateOne(
+              { _id: bookId },
+              { $inc: { copies: -1 } }
+            );
+            return res.status(201).json({
+              message: "Book borrowed successfully",
+              bookdata: Bookdata,
+              borrowDetails: bookIsBorrowed,
+            });
+          }
+        } else {
+          return res.status(400).json({ message: "Book is not available" });
         }
       } else {
-        return res.status(400).json({ message: "Book is not available" });
+        if (!userData) {
+          return res.status(400).json({ message: "User not found" });
+        } else {
+          return res.status(404).json({ message: "Book not found" });
+        }
       }
     } else {
-      if (!userData) {
-        return res.status(400).json({ message: "User not found" });
-      } else {
-        return res.status(404).json({ message: "Book not found" });
-      }
+      return res.status(401).json({
+        status: "Fail",
+        message: "Please provide a valid Token for Access",
+      });
     }
   } catch (error) {
     res.status(400).json({
@@ -80,7 +104,7 @@ export const ReturnBook = async (req, res) => {
     if (borrowRecord.isReturn) {
       return res
         .status(400)
-        .json({ message: "This book has already been returned" });
+        .json({ message: "This book has been already returned" });
     }
 
     // Mark the book as returned
@@ -109,33 +133,56 @@ export const ReturnBook = async (req, res) => {
 export const borrowHistory = async (req, res) => {
   let booksArray = [];
   try {
-    const { userId } = req.body;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.split(" ")[0] === "Bearer"
+    ) {
+      let token = req.headers.authorization.split(" ")[1];
+      const decoded = jwt.verify(token, "secret@3108key");
+      if (decoded) {
+        const userId = decoded.id;
 
-    // Validate if userId is provided in the body
-    if (!userId) {
-      return res.status(400).json({ message: "userId is a required field" });
-    }
+        // Validate if userId is provided in the body
+        if (!userId) {
+          return res
+            .status(400)
+            .json({ message: "userId is a required field" });
+        }
 
-    // Find all borrow records for the given userId
-    const borrowHistory = await borrowModel.find({ userId });
+        // Find all borrow records for the given userId
+        const borrowHistory = await borrowModel.find(
+          { userId },
+          { __v: false }
+        );
 
-    // Check if the user has borrowed any books
-    if (borrowHistory.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No borrow history found for this user" });
+        // Check if the user has borrowed any books
+        if (borrowHistory.length === 0) {
+          return res
+            .status(404)
+            .json({ message: "No borrow history found for this user" });
+        }
+        // creating  a new array of books with of user borrowed;
+        for (let i of borrowHistory) {
+          let eachbook = await bookModel.findOne(
+            { _id: i.bookId.toString() },
+            { __v: false, copies: false }
+          );
+          if (!booksArray.includes(eachbook)) booksArray.push(eachbook);
+        }
+        // Return borrow history (both returned and not returned)
+        return res.status(200).json({
+          message: "Borrow history retrieved successfully",
+          borrowHistory,
+          booksArray,
+        });
+      } else {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+    } else {
+      return res.status(401).json({
+        message: "invalid token Provided || Token not Provided",
+      });
     }
-    // creating  a new array of books with of user borrowed;
-    for (let i of borrowHistory) {
-      let eachbook = await bookModel.findOne({ _id: i.bookId.toString() });
-      if (!booksArray.includes(eachbook)) booksArray.push(eachbook);
-    }
-    // Return borrow history (both returned and not returned)
-    return res.status(200).json({
-      message: "Borrow history retrieved successfully",
-      borrowHistory,
-      booksArray,
-    });
   } catch (error) {
     // Handle errors
     console.log(error);

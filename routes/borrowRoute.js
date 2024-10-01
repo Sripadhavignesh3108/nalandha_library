@@ -7,9 +7,8 @@ import {
   mostBorrowedBooks,
   ReturnBook,
 } from "../controllers/BorrowController.js";
-import { borrowModel } from "../models/borrowModel.js";
-import { bookModel } from "../models/bookModel.js";
 import { restrict, verify } from "../middlewares/authMiddleware.js";
+
 
 export const BorrowRouter = express.Router();
 BorrowRouter.post("/borrowBooks", BorrowBook);
