@@ -1,6 +1,6 @@
 import { userModel } from "../models/userModel.js";
 import jwt from "jsonwebtoken";
-import bycrpt from "bcrypt";
+import bycrpt from "bcryptjs";
 
 export const RegistrationController = async (req, res) => {
   try {
